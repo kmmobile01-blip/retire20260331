@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Settings, Download } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, ComposedChart,
-  AreaChart, Area, LineChart
+  AreaChart, Area, LineChart, Cell
 } from 'recharts';
 import * as XLSX from 'xlsx';
 import { AggregatedYearlyData } from '../types';
@@ -12,22 +12,22 @@ interface AnnualCostChartProps {
 }
 
 const CHART_COLORS = {
-  B: { // 現行制度 (淡い色)
-    type1: '#93c5fd', // blue-300
-    type2: '#6ee7b7', // emerald-300
-    type3: '#fcd34d', // amber-300
-    type4: '#fca5a5', // red-300
+  B: { // 現行制度 (落ち着いたスレート系)
+    type1: '#94a3b8', // slate-400
+    type2: '#cbd5e1', // slate-300
+    type3: '#e2e8f0', // slate-200
+    type4: '#93c5fd', // blue-300 (新制度への架け橋)
   },
-  A: { // 変更案 (濃い色)
-    type1: '#1d4ed8', // blue-700
-    type2: '#047857', // emerald-700
-    type3: '#b45309', // amber-700
-    type4: '#b91c1c', // red-700
+  A: { // 変更案 (洗練されたインディゴ・ブルー系)
+    type1: '#1e293b', // slate-800
+    type2: '#334155', // slate-700
+    type3: '#475569', // slate-600
+    type4: '#4f46e5', // indigo-600 (新制度を強調)
   }
 };
 
 export const AnnualCostChart: React.FC<AnnualCostChartProps> = ({ data }) => {
-  const [chartType, setChartType] = useState<'bar' | 'area' | 'line'>('bar');
+  const [chartType, setChartType] = useState<'bar' | 'area' | 'line' | 'diff'>('bar');
   const [viewPattern, setViewPattern] = useState<'A' | 'B'>('A');
   const [showSettings, setShowSettings] = useState(false);
   const [isAutoYAxis, setIsAutoYAxis] = useState(true);
@@ -267,6 +267,29 @@ export const AnnualCostChart: React.FC<AnnualCostChartProps> = ({ data }) => {
       );
     }
 
+    if (chartType === 'diff') {
+      return (
+        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+          <XAxis dataKey="year" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={{ stroke: '#cbd5e1' }} tickLine={false} />
+          <YAxis tickFormatter={formatYAxis} tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} domain={yAxisDomain} />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend verticalAlign="top" height={36} />
+          <Bar 
+            dataKey="差額" 
+            name="削減効果 (現行B - 変更A)" 
+            fill="#059669" 
+            radius={[4, 4, 0, 0]} 
+            maxBarSize={60}
+          >
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.差額 <= 0 ? '#059669' : '#dc2626'} />
+            ))}
+          </Bar>
+        </BarChart>
+      );
+    }
+
     return null;
   };
 
@@ -322,6 +345,12 @@ export const AnnualCostChart: React.FC<AnnualCostChartProps> = ({ data }) => {
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${chartType === 'line' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
             >
               推移(折れ線)
+            </button>
+            <button 
+              onClick={() => setChartType('diff')} 
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${chartType === 'diff' ? 'bg-white shadow-sm text-emerald-700' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              削減効果(差額)
             </button>
           </div>
           <button 
@@ -389,6 +418,9 @@ export const AnnualCostChart: React.FC<AnnualCostChartProps> = ({ data }) => {
         )}
         {chartType === 'line' && (
           <p>※ 折れ線グラフは、選択したパターンの各年度の退職金支給見込額（千円）を制度区分別に独立して示しています。特定の層の費用がどのタイミングでピークを迎えるかを比較するのに適しています。</p>
+        )}
+        {chartType === 'diff' && (
+          <p>※ 差額グラフは「現行制度B - 変更案A」の削減効果を年度別に示しています。緑色の棒は費用削減（変更案の方が安い）、赤色の棒は費用増加（変更案の方が高い）を意味します。</p>
         )}
       </div>
     </div>

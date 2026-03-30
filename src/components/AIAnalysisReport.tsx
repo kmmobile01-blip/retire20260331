@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AggregatedYearlyData } from '../types';
-import { Bot, Loader2, AlertCircle } from 'lucide-react';
+import { Bot, Loader2, AlertCircle, Download, Printer } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
 import { logError } from '../utils';
@@ -14,6 +14,23 @@ export const AIAnalysisReport: React.FC<AIAnalysisReportProps> = ({ data, custom
     const [report, setReport] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const handleDownloadReport = () => {
+        if (!report) return;
+        const blob = new Blob([report], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ai_analysis_report_${new Date().toISOString().split('T')[0]}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handlePrintReport = () => {
+        window.print();
+    };
 
     const generateReport = async () => {
         if (!data || data.length === 0) return;
@@ -47,6 +64,9 @@ export const AIAnalysisReport: React.FC<AIAnalysisReportProps> = ({ data, custom
 特に、京都バスの退職金制度の歴史的背景（旧制度からの段階的な移行、職能給・考課給の導入経緯など）や、昨今の労働法制の改正（同一労働同一賃金、定年延長、高年齢者雇用安定法の改正など）が退職給付債務に与える潜在的な影響を深く理解しています。
 
 以下の退職金シミュレーション結果（現行制度Bと変更案Aの比較）を分析し、経営者向けにレポートを作成してください。
+
+【重要：単位の扱い】
+- 退職金額や費用の単位は「千円」です。レポート内で金額を出す際は必ず「千円」単位であることを明記し、数値の桁数に注意してください。
 
 【データ概要】
 - 対象期間: ${data[0]?.year}年 ～ ${data[data.length - 1]?.year}年
@@ -94,14 +114,34 @@ Markdown形式で見出しや箇条書きを使って分かりやすく記述し
                     <Bot className="w-6 h-6 text-indigo-600" />
                     AI 分析レポート
                 </h3>
-                <button
-                    onClick={generateReport}
-                    disabled={isLoading || data.length === 0}
-                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-                    {report ? '再生成' : 'レポートを生成'}
-                </button>
+                <div className="flex items-center gap-2">
+                    {report && (
+                        <>
+                            <button
+                                onClick={handleDownloadReport}
+                                className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                title="レポートをダウンロード"
+                            >
+                                <Download className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={handlePrintReport}
+                                className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                title="レポートを印刷/PDF保存"
+                            >
+                                <Printer className="w-5 h-5" />
+                            </button>
+                        </>
+                    )}
+                    <button
+                        onClick={generateReport}
+                        disabled={isLoading || data.length === 0}
+                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                        {report ? '再生成' : 'レポートを生成'}
+                    </button>
+                </div>
             </div>
 
             {error && (

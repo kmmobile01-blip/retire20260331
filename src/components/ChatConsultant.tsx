@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, User, Bot, Loader2, Minimize2, Maximize2 } from 'lucide-react';
+import { MessageCircle, X, Send, User, Bot, Loader2, Minimize2, Maximize2, Settings, Download, Maximize, Minimize } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import Markdown from 'react-markdown';
 import { SimulationConfig, AggregatedYearlyData } from '../types';
@@ -23,11 +23,14 @@ interface ChatConsultantProps {
   config: SimulationConfig;
   aggregatedData: AggregatedYearlyData[];
   customApiKey?: string;
+  onApplyConfig?: (config: Partial<SimulationConfig>) => void;
 }
 
-export const ChatConsultant: React.FC<ChatConsultantProps> = ({ config, aggregatedData, customApiKey }) => {
+export const ChatConsultant: React.FC<ChatConsultantProps> = ({ config, aggregatedData, customApiKey, onApplyConfig }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isLarge, setIsLarge] = useState(false);
+  const [pendingConfig, setPendingConfig] = useState<Partial<SimulationConfig> | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'model', text: 'こんにちは。人事労務コンサルタントのAIアシスタントです。\n\n退職金制度の一般論、現行制度の課題、シミュレーション結果の分析、改定案の提案などについて、何でもご相談ください。' }
   ]);
@@ -44,6 +47,19 @@ export const ChatConsultant: React.FC<ChatConsultantProps> = ({ config, aggregat
       scrollToBottom();
     }
   }, [messages, isOpen, isMinimized]);
+
+  const handleDownloadChat = () => {
+    const chatText = messages.map(m => `[${m.role === 'user' ? '相談者' : 'AIコンサルタント'}]\n${m.text}\n`).join('\n---\n\n');
+    const blob = new Blob([chatText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat_history_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleSend = async (textToSend?: string) => {
     const userText = (textToSend || input).trim();
@@ -78,6 +94,27 @@ export const ChatConsultant: React.FC<ChatConsultantProps> = ({ config, aggregat
 特に、京都バスの退職金制度の歴史的背景（旧制度からの段階的な移行、職能給・考課給の導入経緯など）や、昨今の労働法制の改正（同一労働同一賃金、定年延長、高年齢者雇用安定法の改正など）が退職給付債務に与える潜在的な影響を深く理解しています。
 以下の現在のシミュレーション状況も踏まえて、プロフェッショナルかつ分かりやすく、具体的なアドバイスを提供してください。
 また、コスト削減と従業員の定着率向上（リテンション）の両立に焦点を当て、シミュレーション結果と労働法制の分析に基づいた具体的な制度変更の提案を積極的に行ってください。
+
+【重要：単位と数値の扱い】
+- 退職金額や費用の単位は「千円」です。回答内で金額を出す際は必ず「千円」単位であることを明記し、数値の桁数に注意してください。
+- ポイント単価は通常「1,000円」や「1,200円」などの絶対値です。
+- 支給率は「1.0」や「0.8」などの係数です。
+
+【重要：設定の自動反映】
+もし具体的なパラメータ（定年年齢、ポイント単価、頭打ち年数など）の変更を提案する場合、回答の最後に以下の形式のJSONブロックを含めてください。これによりユーザーがワンクリックで設定を反映できるようになります。
+JSONには変更したいプロパティのみを含めてください。
+
+\`\`\`json
+{
+  "type": "PROPOSAL",
+  "config": {
+    "unitPrice": 1100,
+    "retirementAgesFuture": { "type1": 65, "type2": 65, "type3": 65, "type4": 65 },
+    "cutoffYearsFuture": { "type1": 40, "type2": 40, "type3": 40 }
+  }
+}
+\`\`\`
+
 回答はMarkdown形式で、適宜見出しや箇条書きを使って読みやすくしてください。
 
 ${contextSummary}
@@ -112,6 +149,19 @@ ${contextSummary}
           return newMessages;
         });
       }
+
+      // Parse for proposal JSON
+      const jsonMatch = fullText.match(/```json\n([\s\S]*?)\n```/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[1]);
+          if (parsed.type === 'PROPOSAL' && parsed.config) {
+            setPendingConfig(parsed.config);
+          }
+        } catch (e) {
+          console.error("Failed to parse proposal JSON", e);
+        }
+      }
     } catch (error: any) {
       logError("Chat error", error, { messageLength: input.length });
       setMessages(prev => [...prev, { role: 'model', text: '申し訳ありません。エラーが発生しました。もう一度お試しください。' }]);
@@ -124,6 +174,14 @@ ${contextSummary}
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleApplyConfig = () => {
+    if (pendingConfig && onApplyConfig) {
+      onApplyConfig(pendingConfig);
+      setMessages(prev => [...prev, { role: 'model', text: '提案された設定をシミュレーション（変更案A）に反映しました。グラフを確認してください。' }]);
+      setPendingConfig(null);
     }
   };
 
@@ -140,7 +198,7 @@ ${contextSummary}
   }
 
   return (
-    <div className={`fixed right-6 z-50 flex flex-col bg-white rounded-xl shadow-2xl border border-gray-200 transition-all duration-300 ${isMinimized ? 'bottom-6 h-14 w-80' : 'bottom-6 h-[600px] max-h-[80vh] w-[400px] max-w-[90vw]'}`}>
+    <div className={`fixed right-6 z-50 flex flex-col bg-white rounded-xl shadow-2xl border border-gray-200 transition-all duration-300 ${isMinimized ? 'bottom-6 h-14 w-80' : isLarge ? 'bottom-6 h-[800px] max-h-[90vh] w-[600px] max-w-[95vw]' : 'bottom-6 h-[600px] max-h-[80vh] w-[400px] max-w-[90vw]'}`}>
       {/* Header */}
       <div className="flex items-center justify-between p-3 bg-blue-600 text-white rounded-t-xl cursor-pointer" onClick={() => setIsMinimized(!isMinimized)}>
         <div className="flex items-center gap-2">
@@ -148,6 +206,24 @@ ${contextSummary}
           <h3 className="font-bold text-sm">人事労務コンサルタント</h3>
         </div>
         <div className="flex items-center gap-1">
+          {!isMinimized && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleDownloadChat(); }}
+              className="p-1 hover:bg-blue-700 rounded transition-colors"
+              title="チャット履歴をダウンロード"
+            >
+              <Download size={16} />
+            </button>
+          )}
+          {!isMinimized && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setIsLarge(!isLarge); }}
+              className="p-1 hover:bg-blue-700 rounded transition-colors"
+              title={isLarge ? "縮小" : "拡大"}
+            >
+              {isLarge ? <Minimize size={16} /> : <Maximize size={16} />}
+            </button>
+          )}
           <button 
             onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
             className="p-1 hover:bg-blue-700 rounded transition-colors"
@@ -194,6 +270,33 @@ ${contextSummary}
                   <div className="p-3 rounded-2xl bg-white border border-gray-200 text-gray-800 rounded-tl-none shadow-sm flex items-center gap-2">
                     <Loader2 size={16} className="animate-spin text-blue-600" />
                     <span className="text-xs text-gray-500">入力中...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {pendingConfig && (
+              <div className="flex justify-center my-4 animate-in fade-in zoom-in duration-300">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm flex flex-col items-center gap-3 max-w-[90%]">
+                  <div className="flex items-center gap-2 text-blue-800 font-bold text-sm">
+                    <Settings size={18} />
+                    <span>AIからの設定変更提案があります</span>
+                  </div>
+                  <p className="text-xs text-blue-600 text-center">
+                    この提案を「変更案A」のシミュレーション設定に自動反映しますか？
+                  </p>
+                  <div className="flex gap-2 w-full">
+                    <button
+                      onClick={() => setPendingConfig(null)}
+                      className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      無視する
+                    </button>
+                    <button
+                      onClick={handleApplyConfig}
+                      className="flex-1 px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                    >
+                      設定を反映する
+                    </button>
                   </div>
                 </div>
               </div>

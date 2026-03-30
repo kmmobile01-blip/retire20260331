@@ -831,8 +831,13 @@ export default function MainApp() {
                                 <Calendar className="w-5 h-5 absolute left-3 top-2.5 text-slate-500"/>
                                 <input 
                                     type="date" 
-                                    value={config.transitionConfig.date instanceof Date ? config.transitionConfig.date.toISOString().split('T')[0] : ''}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfig({ ...config, transitionConfig: { ...config.transitionConfig, date: new Date(e.target.value) } })}
+                                    value={config.transitionConfig.date instanceof Date && !isNaN(config.transitionConfig.date.getTime()) ? config.transitionConfig.date.toISOString().split('T')[0] : ''}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const newDate = new Date(e.target.value);
+                                        if (!isNaN(newDate.getTime())) {
+                                            setConfig({ ...config, transitionConfig: { ...config.transitionConfig, date: newDate } });
+                                        }
+                                    }}
                                     className="w-full pl-10 p-2.5 text-base border-slate-300 rounded shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                                 />
                             </div>
@@ -1424,7 +1429,12 @@ export default function MainApp() {
                         setCustomApiKey={setCustomApiKey} 
                     />
                 )}
-                <ChatConsultant config={configA} aggregatedData={aggregatedData} customApiKey={customApiKey} />
+                <ChatConsultant 
+                    config={configA} 
+                    aggregatedData={aggregatedData} 
+                    customApiKey={customApiKey} 
+                    onApplyConfig={(newConfig) => setConfigA(prev => ({ ...prev, ...newConfig }))}
+                />
             </div>
         </div>
     );
